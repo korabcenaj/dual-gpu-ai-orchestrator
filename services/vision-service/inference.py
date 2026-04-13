@@ -35,7 +35,11 @@ _PROVIDERS_PRIORITY = [
 
 
 def _build_session(model_path: Path) -> ort.InferenceSession:
+    if not model_path.exists():
+        raise FileNotFoundError(f"Model file missing: {model_path}")
+
     available = {p for p in ort.get_available_providers()}
+    logger.info("ONNX Runtime providers available: %s", sorted(available))
     for provider, opts in _PROVIDERS_PRIORITY:
         if provider in available or provider == "CPUExecutionProvider":
             try:
@@ -52,7 +56,10 @@ def _build_session(model_path: Path) -> ort.InferenceSession:
                 return sess
             except Exception as exc:
                 logger.warning("Provider %s failed: %s — trying next", provider, exc)
-    raise RuntimeError(f"No valid provider found for {model_path}")
+    raise RuntimeError(
+        f"No valid provider found for {model_path}. "
+        f"Available providers: {sorted(available)}"
+    )
 
 
 def _load_imagenet_labels() -> list[str]:
