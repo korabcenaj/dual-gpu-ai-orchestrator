@@ -1,0 +1,7 @@
+# llama-cpp-python must be installed with Vulkan support:
+# CMAKE_ARGS="-DGGML_VULKAN=on" pip install llama-cpp-python
+llama-cpp-python==0.3.2
+celery[redis]==5.4.0
+redis==5.2.0
+psycopg2-binary==2.9.10
+sqlalchemy==2.0.36
