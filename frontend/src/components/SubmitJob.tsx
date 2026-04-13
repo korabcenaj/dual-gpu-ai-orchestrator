@@ -1,28 +1,40 @@
 import { useState, useRef } from "react";
-import { submitVisionJob, submitLlmJob } from "../api/client";
+import { submitVisionJob, submitLlmJob, submitBatchVisionJobs } from "../api/client";
 
 export default function SubmitJob({ onSubmitted }: { onSubmitted: () => void }) {
   const [jobType, setJobType] = useState<"vision" | "llm">("llm");
+  const [isBatch, setIsBatch] = useState(false);
   const [prompt, setPrompt] = useState("");
   const [task, setTask] = useState("generate");
   const [maxTokens, setMaxTokens] = useState(256);
+  const [priority, setPriority] = useState<"low" | "medium" | "high">("medium");
   const [file, setFile] = useState<File | null>(null);
+  const [batchFiles, setBatchFiles] = useState<File[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const batchFileRef = useRef<HTMLInputElement>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setSubmitting(true);
     try {
-      if (jobType === "vision") {
+      if (jobType === "vision" && isBatch) {
+        if (batchFiles.length === 0) { setError("Select at least one image"); return; }
+        await submitBatchVisionJobs(batchFiles, task, priority);
+        setBatchFiles([]);
+        if (batchFileRef.current) batchFileRef.current.value = "";
+      } else if (jobType === "vision") {
         if (!file) { setError("Select an image file"); return; }
-        await submitVisionJob(file, task);
+        await submitVisionJob(file, task, priority);
       } else {
         if (!prompt.trim()) { setError("Enter a prompt"); return; }
-        await submitLlmJob(prompt.trim(), task, maxTokens);
+        await submitLlmJob(prompt.trim(), task, maxTokens, priority);
       }
+      setPrompt("");
+      setFile(null);
+      if (fileRef.current) fileRef.current.value = "";
       onSubmitted();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -43,7 +55,7 @@ export default function SubmitJob({ onSubmitted }: { onSubmitted: () => void }) 
             <button
               key={t}
               type="button"
-              onClick={() => { setJobType(t); setTask(t === "llm" ? "generate" : "classify"); }}
+              onClick={() => { setJobType(t); setTask(t === "llm" ? "generate" : "classify"); setIsBatch(false); }}
               className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-colors ${
                 jobType === t
                   ? "border-violet-500 bg-violet-950 text-violet-300"
@@ -54,6 +66,20 @@ export default function SubmitJob({ onSubmitted }: { onSubmitted: () => void }) 
             </button>
           ))}
         </div>
+
+        {/* Batch mode toggle for vision */}
+        {jobType === "vision" && (
+          <div className="flex items-center gap-2 bg-gray-800 border border-gray-700 rounded-lg p-3">
+            <input
+              type="checkbox"
+              id="batch"
+              checked={isBatch}
+              onChange={(e) => setIsBatch(e.target.checked)}
+              className="w-4 h-4 accent-violet-500"
+            />
+            <label htmlFor="batch" className="text-sm text-gray-400">Batch processing (multiple images)</label>
+          </div>
+        )}
 
         {/* Task */}
         <div>
@@ -70,6 +96,20 @@ export default function SubmitJob({ onSubmitted }: { onSubmitted: () => void }) 
               : ["classify", "detect"].map((o) => (
                   <option key={o} value={o}>{o}</option>
                 ))}
+          </select>
+        </div>
+
+        {/* Priority */}
+        <div>
+          <label className="block text-sm text-gray-400 mb-1">Priority</label>
+          <select
+            value={priority}
+            onChange={(e) => setPriority(e.target.value as "low" | "medium" | "high")}
+            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm"
+          >
+            <option value="low">Low (background)</option>
+            <option value="medium">Medium (default)</option>
+            <option value="high">High (urgent)</option>
           </select>
         </div>
 
@@ -102,18 +142,39 @@ export default function SubmitJob({ onSubmitted }: { onSubmitted: () => void }) 
           </>
         )}
 
-        {/* Vision file */}
+        {/* Vision file - single or batch */}
         {jobType === "vision" && (
           <div>
-            <label className="block text-sm text-gray-400 mb-1">Image file</label>
-            <input
-              ref={fileRef}
-              type="file"
-              accept="image/*"
-              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-              className="block text-sm text-gray-300 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:bg-violet-900 file:text-violet-200 file:cursor-pointer"
-            />
-            {file && <div className="text-xs text-gray-500 mt-1">{file.name}</div>}
+            {isBatch ? (
+              <>
+                <label className="block text-sm text-gray-400 mb-1">Image files (max 100)</label>
+                <input
+                  ref={batchFileRef}
+                  type="file"
+                  multiple
+                  accept="image/*"
+                  onChange={(e) => setBatchFiles(Array.from(e.target.files ?? []))}
+                  className="block text-sm text-gray-300 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:bg-violet-900 file:text-violet-200 file:cursor-pointer"
+                />
+                {batchFiles.length > 0 && (
+                  <div className="mt-2 text-xs text-gray-500">
+                    {batchFiles.length} file{batchFiles.length !== 1 ? 's' : ''} selected
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                <label className="block text-sm text-gray-400 mb-1">Image file</label>
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                  className="block text-sm text-gray-300 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:bg-violet-900 file:text-violet-200 file:cursor-pointer"
+                />
+                {file && <div className="text-xs text-gray-500 mt-1">{file.name}</div>}
+              </>
+            )}
           </div>
         )}
 
@@ -128,7 +189,7 @@ export default function SubmitJob({ onSubmitted }: { onSubmitted: () => void }) 
           disabled={submitting}
           className="w-full py-2.5 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 rounded-lg text-sm font-medium transition-colors"
         >
-          {submitting ? "Submitting…" : "Submit Job"}
+          {submitting ? "Submitting…" : isBatch ? `Submit ${batchFiles.length} Jobs` : "Submit Job"}
         </button>
       </form>
     </div>

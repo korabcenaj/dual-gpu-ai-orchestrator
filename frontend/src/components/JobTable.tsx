@@ -16,6 +16,12 @@ const BACKEND_COLORS: Record<string, string> = {
   "amd-wx3100-vulkan":   "text-orange-400",
 };
 
+const PRIORITY_COLORS: Record<string, string> = {
+  low:    "bg-gray-800 text-gray-300",
+  medium: "bg-blue-900 text-blue-300",
+  high:   "bg-red-900 text-red-300",
+};
+
 export default function JobTable({
   jobs,
   isLoading,
@@ -46,7 +52,7 @@ export default function JobTable({
       <table className="w-full text-sm">
         <thead className="bg-gray-900 text-gray-400 text-xs uppercase tracking-wider">
           <tr>
-            {["ID", "Type", "Backend", "Status", "Duration", "Created", ""].map((h) => (
+            {["ID", "Type", "Backend", "Priority", "Status", "Duration", "Created", ""].map((h) => (
               <th key={h} className="px-4 py-3 text-left">{h}</th>
             ))}
           </tr>
@@ -61,6 +67,12 @@ export default function JobTable({
               <td className={clsx("px-4 py-3 font-mono text-xs",
                 BACKEND_COLORS[job.backend ?? ""] ?? "text-gray-500")}>
                 {job.backend ?? "—"}
+              </td>
+              <td className="px-4 py-3">
+                <span className={clsx("px-2 py-0.5 rounded-full text-xs font-medium capitalize",
+                  PRIORITY_COLORS[job.priority] ?? "bg-gray-700 text-gray-300")}>
+                  {job.priority}
+                </span>
               </td>
               <td className="px-4 py-3">
                 <span className={clsx("px-2 py-0.5 rounded-full text-xs font-medium",

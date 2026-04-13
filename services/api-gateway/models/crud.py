@@ -15,8 +15,9 @@ async def create_job(
     db: AsyncSession,
     job_type: str,
     payload: dict[str, Any],
+    priority: str = "medium",
 ) -> Job:
-    job = Job(job_type=job_type, payload=payload, status=JobStatus.QUEUED)
+    job = Job(job_type=job_type, payload=payload, priority=priority, status=JobStatus.QUEUED)
     db.add(job)
     await db.commit()
     await db.refresh(job)

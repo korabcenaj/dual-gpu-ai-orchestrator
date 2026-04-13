@@ -23,6 +23,7 @@ class Job(Base):
     )
     job_type: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="pending", index=True)
+    priority: Mapped[str] = mapped_column(String(32), nullable=False, default="medium", index=True)
     backend: Mapped[str | None] = mapped_column(String(64), nullable=True)
     payload: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     result: Mapped[dict | None] = mapped_column(JSON, nullable=True)

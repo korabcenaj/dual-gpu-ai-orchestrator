@@ -18,9 +18,16 @@ class JobStatus(str, Enum):
     CANCELLED = "cancelled"
 
 
+class Priority(str, Enum):
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+
+
 class JobCreate(BaseModel):
     job_type: str
     payload: dict[str, Any]
+    priority: Priority = Priority.MEDIUM
 
 
 class JobOut(BaseModel):
@@ -29,6 +36,7 @@ class JobOut(BaseModel):
     id: uuid.UUID
     job_type: str
     status: JobStatus
+    priority: Priority
     backend: Optional[str]
     created_at: datetime
     updated_at: datetime
