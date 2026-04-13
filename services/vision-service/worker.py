@@ -11,6 +11,7 @@ import time
 import uuid
 
 from celery import Celery
+from psycopg2.extras import Json
 from sqlalchemy import create_engine, update
 from sqlalchemy.orm import Session
 
@@ -43,7 +44,7 @@ def _update_job(
     with sync_engine.connect() as conn:
         values: dict = {"status": status, "backend": backend}
         if result is not None:
-            values["result"] = result
+            values["result"] = Json(result)
         if error is not None:
             values["error"] = error
         if duration_ms is not None:
@@ -75,7 +76,7 @@ def run_inference(self, job_id: str, payload: dict):
         logger.info("Job %s completed in %d ms", job_id, duration_ms)
     except Exception as exc:
         logger.exception("Job %s failed: %s", job_id, exc)
-        try:
-            raise self.retry(exc=exc, countdown=5)
-        except self.MaxRetriesExceededError:
+        if self.request.retries >= self.max_retries:
             _update_job(job_id, "failed", "intel-igpu-openvino", error=str(exc))
+            return
+        raise self.retry(exc=exc, countdown=5)

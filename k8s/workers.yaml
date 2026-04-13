@@ -28,7 +28,7 @@ spec:
         - name: vision-worker
           image: vision-worker:latest
           imagePullPolicy: IfNotPresent
-          command: ["celery", "-A", "worker", "worker", "--queues=vision", "--concurrency=1", "--loglevel=info"]
+          args: ["celery", "-A", "worker", "worker", "--queues=vision", "--concurrency=1", "--loglevel=info"]
           securityContext:
             privileged: true
           env:
@@ -42,19 +42,16 @@ spec:
                 secretKeyRef:
                   name: app-secrets
                   key: DATABASE_URL_SYNC
+            - name: PYTHONPATH
+              value: /app
           volumeMounts:
             - name: dri-dev
               mountPath: /dev/dri
-            - name: models
-              mountPath: /app/models
       volumes:
         - name: dri-dev
           hostPath:
             path: /dev/dri
             type: Directory
-        - name: models
-          persistentVolumeClaim:
-            claimName: vision-models
 
 ---
 apiVersion: apps/v1
@@ -87,7 +84,7 @@ spec:
         - name: llm-worker
           image: llm-worker:latest
           imagePullPolicy: IfNotPresent
-          command: ["celery", "-A", "worker", "worker", "--queues=llm", "--concurrency=1", "--loglevel=info"]
+          args: ["celery", "-A", "worker", "worker", "--queues=llm", "--concurrency=1", "--loglevel=info"]
           securityContext:
             privileged: true
           env:
@@ -103,16 +100,13 @@ spec:
                   key: DATABASE_URL_SYNC
             - name: LLM_GPU_LAYERS
               value: "35"
+            - name: PYTHONPATH
+              value: /app
           volumeMounts:
             - name: dri-dev
               mountPath: /dev/dri
-            - name: models
-              mountPath: /app/models
       volumes:
         - name: dri-dev
           hostPath:
             path: /dev/dri
             type: Directory
-        - name: models
-          persistentVolumeClaim:
-            claimName: llm-models

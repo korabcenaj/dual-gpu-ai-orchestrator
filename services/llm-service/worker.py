@@ -9,6 +9,7 @@ import os
 import time
 
 from celery import Celery
+from psycopg2.extras import Json
 from sqlalchemy import create_engine, text
 
 logger = logging.getLogger(__name__)
@@ -31,7 +32,7 @@ def _update_job(job_id, status, backend, result=None, error=None, duration_ms=No
     with sync_engine.connect() as conn:
         values = {"status": status, "backend": backend}
         if result is not None:
-            values["result"] = result
+            values["result"] = Json(result)
         if error is not None:
             values["error"] = error
         if duration_ms is not None:
@@ -65,7 +66,7 @@ def run_inference(self, job_id: str, payload: dict):
                     result.get("tokens_generated", 0), duration_ms)
     except Exception as exc:
         logger.exception("Job %s failed: %s", job_id, exc)
-        try:
-            raise self.retry(exc=exc, countdown=10)
-        except self.MaxRetriesExceededError:
+        if self.request.retries >= self.max_retries:
             _update_job(job_id, "failed", "amd-wx3100-vulkan", error=str(exc))
+            return
+        raise self.retry(exc=exc, countdown=10)
