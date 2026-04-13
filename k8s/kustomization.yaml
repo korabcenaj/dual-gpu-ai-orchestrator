@@ -12,6 +12,7 @@ resources:
   - api-gateway.yaml
   - workers.yaml
   - frontend.yaml
+  - ingress.yaml
 
 images:
   - name: api-gateway

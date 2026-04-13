@@ -1,0 +1,31 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: vision-image-build
+  namespace: ai-orchestrator
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: kaniko
+          image: gcr.io/kaniko-project/executor:latest
+          args:
+            - --context=git://github.com/korabcenaj/dual-gpu-ai-orchestrator.git#refs/heads/main
+            - --context-sub-path=services/vision-service
+            - --dockerfile=Dockerfile
+            - --destination=ghcr.io/korabcenaj/dual-gpu-vision-worker:latest
+            - --single-snapshot
+            - --cache=false
+          volumeMounts:
+            - name: docker-config
+              mountPath: /kaniko/.docker/config.json
+              subPath: .dockerconfigjson
+      volumes:
+        - name: docker-config
+          secret:
+            secretName: ghcr-creds
+            items:
+              - key: .dockerconfigjson
+                path: .dockerconfigjson

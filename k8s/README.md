@@ -68,7 +68,27 @@ kubectl rollout restart deployment -n ai-orchestrator \
 	api-gateway dispatch-worker frontend vision-worker llm-worker
 ```
 
-## 5) Access services (NodePort)
+If only the vision image needs to be rebuilt in-cluster without Docker, use the Kaniko job:
+
+```bash
+make k8s-rebuild-vision
+make k8s-restart-vision
+kubectl get pods -n ai-orchestrator -w
+```
+
+This uses `k8s/vision-image-build-job.yaml` to build and push `ghcr.io/korabcenaj/dual-gpu-vision-worker:latest` from inside the cluster.
+
+## 5) Access services
+
+Ingress is available through the existing `ingress-nginx` controller using:
+
+- App: `http://ai-orchestrator.local.lan/`
+- API: `http://ai-orchestrator.local.lan/api/v1/health`
+
+
+```
+
+NodePort remains available as a fallback:
 
 - Frontend: `http://<node-ip>:30080`
 - API gateway: `http://<node-ip>:30081`
