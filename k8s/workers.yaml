@@ -47,6 +47,9 @@ spec:
           volumeMounts:
             - name: dri-dev
               mountPath: /dev/dri
+          - name: vision-worker
+            image: ghcr.io/korabcenaj/dual-gpu-vision-worker:latest
+            imagePullPolicy: Always
       volumes:
         - name: dri-dev
           hostPath:

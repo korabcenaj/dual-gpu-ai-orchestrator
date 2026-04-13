@@ -12,8 +12,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-# Pre-download models at build time
-RUN python models/download_models.py || true
+# Pre-download models at build time (fail hard if download fails)
+RUN python models/download_models.py
 RUN chmod +x entrypoint.sh
 
 ENV PYTHONUNBUFFERED=1
