@@ -46,11 +46,11 @@ def _update_job(job_id, status, backend, result=None, error=None, duration_ms=No
 
 @celery_app.task(name="llm_service.run_inference", bind=True, max_retries=2)
 def run_inference(self, job_id: str, payload: dict):
-    from inference import run_inference as _infer
-
     _update_job(job_id, "running", "amd-wx3100-vulkan")
     t0 = time.perf_counter()
     try:
+        from inference import run_inference as _infer
+
         result = _infer(
             text=payload["prompt"],
             task=payload.get("task", "generate"),

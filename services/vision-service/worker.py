@@ -58,11 +58,11 @@ def _update_job(
 
 @celery_app.task(name="vision_service.run_inference", bind=True, max_retries=2)
 def run_inference(self, job_id: str, payload: dict):
-    from inference import run_classification, run_detection
-
     _update_job(job_id, "running", "intel-igpu-openvino")
     t0 = time.perf_counter()
     try:
+        from inference import run_classification, run_detection
+
         image_bytes = bytes.fromhex(payload["file_bytes"])
         task = payload.get("task", "classify")
         if task == "detect":
