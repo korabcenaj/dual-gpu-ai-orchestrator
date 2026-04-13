@@ -7,12 +7,12 @@ Monitoring is expected to be provided by the existing cluster monitoring namespa
 
 Edit `k8s/kustomization.yaml` and replace the placeholder registry paths under `images`:
 
-- `ghcr.io/mena/dual-gpu-api-gateway`
-- `ghcr.io/mena/dual-gpu-vision-worker`
-- `ghcr.io/mena/dual-gpu-llm-worker`
-- `ghcr.io/mena/dual-gpu-frontend`
+- `ghcr.io/korabcenaj/dual-gpu-api-gateway`
+- `ghcr.io/korabcenaj/dual-gpu-vision-worker`
+- `ghcr.io/korabcenaj/dual-gpu-llm-worker`
+- `ghcr.io/korabcenaj/dual-gpu-frontend`
 
-If your GitHub owner is different, replace `mena` with your owner name.
+If your GitHub owner is different, replace `korabcenaj` with your owner name.
 
 These images must be reachable by your Kubernetes nodes.
 

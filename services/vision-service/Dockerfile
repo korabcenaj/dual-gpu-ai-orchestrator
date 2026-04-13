@@ -2,8 +2,7 @@ FROM python:3.12-slim
 
 # OpenVINO OS dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libgomp1 libglib2.0-0 libGL1 libglib2.0-0 \
-    intel-media-va-driver-non-free \
+    libgomp1 libglib2.0-0 libGL1 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

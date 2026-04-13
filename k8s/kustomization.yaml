@@ -15,14 +15,14 @@ resources:
 
 images:
   - name: api-gateway
-    newName: ghcr.io/mena/dual-gpu-api-gateway
+    newName: ghcr.io/korabcenaj/dual-gpu-api-gateway
     newTag: latest
   - name: vision-worker
-    newName: ghcr.io/mena/dual-gpu-vision-worker
+    newName: ghcr.io/korabcenaj/dual-gpu-vision-worker
     newTag: latest
   - name: llm-worker
-    newName: ghcr.io/mena/dual-gpu-llm-worker
+    newName: ghcr.io/korabcenaj/dual-gpu-llm-worker
     newTag: latest
   - name: frontend
-    newName: ghcr.io/mena/dual-gpu-frontend
+    newName: ghcr.io/korabcenaj/dual-gpu-frontend
     newTag: latest
