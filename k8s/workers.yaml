@@ -1,0 +1,118 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vision-worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vision-worker
+  template:
+    metadata:
+      labels:
+        app: vision-worker
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: k8s-master
+      imagePullSecrets:
+        - name: ghcr-creds
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: gpu-vision
+                    operator: In
+                    values: ["true"]
+      containers:
+        - name: vision-worker
+          image: vision-worker:latest
+          imagePullPolicy: IfNotPresent
+          command: ["celery", "-A", "worker", "worker", "--queues=vision", "--concurrency=1", "--loglevel=info"]
+          securityContext:
+            privileged: true
+          env:
+            - name: REDIS_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: REDIS_URL
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: DATABASE_URL_SYNC
+          volumeMounts:
+            - name: dri-dev
+              mountPath: /dev/dri
+            - name: models
+              mountPath: /app/models
+      volumes:
+        - name: dri-dev
+          hostPath:
+            path: /dev/dri
+            type: Directory
+        - name: models
+          persistentVolumeClaim:
+            claimName: vision-models
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: llm-worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: llm-worker
+  template:
+    metadata:
+      labels:
+        app: llm-worker
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: k8s-master
+      imagePullSecrets:
+        - name: ghcr-creds
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: gpu-llm
+                    operator: In
+                    values: ["true"]
+      containers:
+        - name: llm-worker
+          image: llm-worker:latest
+          imagePullPolicy: IfNotPresent
+          command: ["celery", "-A", "worker", "worker", "--queues=llm", "--concurrency=1", "--loglevel=info"]
+          securityContext:
+            privileged: true
+          env:
+            - name: REDIS_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: REDIS_URL
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: DATABASE_URL_SYNC
+            - name: LLM_GPU_LAYERS
+              value: "35"
+          volumeMounts:
+            - name: dri-dev
+              mountPath: /dev/dri
+            - name: models
+              mountPath: /app/models
+      volumes:
+        - name: dri-dev
+          hostPath:
+            path: /dev/dri
+            type: Directory
+        - name: models
+          persistentVolumeClaim:
+            claimName: llm-models

@@ -1,0 +1,28 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: ai-orchestrator
+
+resources:
+  - namespace.yaml
+  - config.yaml
+  - storage.yaml
+  - postgres.yaml
+  - redis.yaml
+  - api-gateway.yaml
+  - workers.yaml
+  - frontend.yaml
+
+images:
+  - name: api-gateway
+    newName: ghcr.io/mena/dual-gpu-api-gateway
+    newTag: latest
+  - name: vision-worker
+    newName: ghcr.io/mena/dual-gpu-vision-worker
+    newTag: latest
+  - name: llm-worker
+    newName: ghcr.io/mena/dual-gpu-llm-worker
+    newTag: latest
+  - name: frontend
+    newName: ghcr.io/mena/dual-gpu-frontend
+    newTag: latest
