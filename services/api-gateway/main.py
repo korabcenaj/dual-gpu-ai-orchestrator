@@ -5,10 +5,53 @@ Exposes REST endpoints for job submission, status, and results.
 import os
 import uuid
 from contextlib import asynccontextmanager
-
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from prometheus_client import make_asgi_app
+from typing import List
+import asyncio
+import aioredis
+import json
+
+REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
+
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: List[WebSocket] = []
+
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+
+    def disconnect(self, websocket: WebSocket):
+        self.active_connections.remove(websocket)
+
+    async def broadcast(self, message: str):
+        for connection in self.active_connections:
+            await connection.send_text(message)
+
+manager = ConnectionManager()
+
+@app.websocket("/ws/jobs")
+async def websocket_endpoint(websocket: WebSocket):
+    await manager.connect(websocket)
+    try:
+        while True:
+            await websocket.receive_text()  # Keep connection alive
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
+
+async def redis_listener():
+    redis = await aioredis.create_redis(REDIS_URL)
+    res = await redis.subscribe("job_status")
+    ch = res[0]
+    while await ch.wait_message():
+        msg = await ch.get(encoding="utf-8")
+        await manager.broadcast(msg)
+
+@app.on_event("startup")
+def start_redis_listener():
+    loop = asyncio.get_event_loop()
+    loop.create_task(redis_listener())
 
 from routers import jobs, health
 from models.database import init_db

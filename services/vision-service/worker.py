@@ -14,6 +14,8 @@ from celery import Celery
 from psycopg2.extras import Json
 from sqlalchemy import create_engine, update
 from sqlalchemy.orm import Session
+import redis
+import json
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +31,7 @@ celery_app.conf.result_serializer = "json"
 celery_app.conf.accept_content = ["json"]
 
 sync_engine = create_engine(DATABASE_URL, pool_pre_ping=True)
+redis_client = redis.from_url(REDIS_URL)
 
 
 def _update_job(
@@ -57,26 +60,31 @@ def _update_job(
         conn.commit()
 
 
+def broadcast_status(job_id, status, backend, result=None, error=None, duration_ms=None):
+    message = {
+        "job_id": job_id,
+        "status": status,
+        "backend": backend,
+        "result": result,
+        "error": error,
+        "duration_ms": duration_ms,
+    }
+    redis_client.publish("job_status", json.dumps(message, default=str))
+
+
 @celery_app.task(name="vision_service.run_inference", bind=True, max_retries=2)
 def run_inference(self, job_id: str, payload: dict):
     _update_job(job_id, "running", "intel-igpu-openvino")
+    broadcast_status(job_id, "running", "intel-igpu-openvino")
     t0 = time.perf_counter()
     try:
-        from inference import run_classification, run_detection
+        from inference import run_inference as _infer
 
-        image_bytes = bytes.fromhex(payload["file_bytes"])
-        task = payload.get("task", "classify")
-        if task == "detect":
-            result = run_detection(image_bytes)
-        else:
-            result = run_classification(image_bytes)
+        result = _infer(payload)
         duration_ms = int((time.perf_counter() - t0) * 1000)
-        _update_job(job_id, "completed", "intel-igpu-openvino",
-                    result=result, duration_ms=duration_ms)
-        logger.info("Job %s completed in %d ms", job_id, duration_ms)
-    except Exception as exc:
-        logger.exception("Job %s failed: %s", job_id, exc)
-        if self.request.retries >= self.max_retries:
-            _update_job(job_id, "failed", "intel-igpu-openvino", error=str(exc))
-            return
-        raise self.retry(exc=exc, countdown=5)
+        _update_job(job_id, "completed", "intel-igpu-openvino", result=result, duration_ms=duration_ms)
+        broadcast_status(job_id, "completed", "intel-igpu-openvino", result=result, duration_ms=duration_ms)
+    except Exception as e:
+        _update_job(job_id, "failed", "intel-igpu-openvino", error=str(e))
+        broadcast_status(job_id, "failed", "intel-igpu-openvino", error=str(e))
+        raise

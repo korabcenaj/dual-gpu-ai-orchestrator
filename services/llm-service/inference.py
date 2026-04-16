@@ -117,3 +117,49 @@ def run_inference(
         "tokens_per_second": tokens_per_sec,
         "inference_ms": elapsed_ms,
     }
+
+
+def run_inference_with_progress(
+    job_id: str,
+    text: str,
+    task: str = "generate",
+    labels: list[str] | None = None,
+    max_tokens: int = 256,
+    temperature: float = 0.3,
+    progress_callback=None,
+) -> dict[str, Any]:
+    if task not in PROMPTS:
+        raise ValueError(f"Unknown task {task!r}. Choose from: {list(PROMPTS)}")
+    if len(text) > 8000:
+        text = text[:8000]
+
+    label_str = ", ".join(labels or DEFAULT_LABELS)
+    prompt = PROMPTS[task].format(text=text, labels=label_str)
+
+    t0 = time.perf_counter()
+    llm = get_llm()
+    tokens_generated = 0
+    output_text = ""
+    def on_token(token):
+        nonlocal tokens_generated, output_text
+        tokens_generated += 1
+        output_text += token
+        if progress_callback:
+            percent = int(100 * tokens_generated / max_tokens)
+            progress_callback(job_id, percent)
+    output = llm(
+        prompt,
+        max_tokens=max_tokens,
+        temperature=temperature,
+        stop=["</s>", "<|user|>"],
+        echo=False,
+        stream=True,
+        callback=on_token,
+    )
+    elapsed_ms = int((time.perf_counter() - t0) * 1000)
+    return {
+        "task": task,
+        "output": output_text,
+        "tokens_generated": tokens_generated,
+        "inference_ms": elapsed_ms,
+    }

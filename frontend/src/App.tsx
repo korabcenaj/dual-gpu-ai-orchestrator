@@ -6,12 +6,25 @@ import SubmitJob from "./components/SubmitJob";
 import MetricsPanel from "./components/MetricsPanel";
 import HealthBadge from "./components/HealthBadge";
 import { fetchJobs } from "./api/client";
+import { useJobWebSocket, JobStatusMessage } from "./hooks/useJobWebSocket";
+import JobStatusToaster from "./components/JobStatusToaster";
 
 type Tab = "jobs" | "submit" | "metrics";
 
 export default function App() {
   const [tab, setTab] = useState<Tab>("jobs");
-  const { data: jobs = [], isLoading } = useQuery("jobs", fetchJobs);
+  const { data: jobs = [], isLoading, refetch } = useQuery("jobs", fetchJobs);
+  const [toastMsg, setToastMsg] = useState<JobStatusMessage | null>(null);
+  const jobsRef = useRef(jobs);
+  jobsRef.current = jobs;
+
+  // WebSocket: update job table and show toast
+  const handleJobStatus = useCallback((msg: JobStatusMessage) => {
+    setToastMsg(msg);
+    // Optionally, refetch jobs or optimistically update job table here
+    refetch();
+  }, [refetch]);
+  useJobWebSocket(handleJobStatus);
 
   const pending = jobs.filter((j) => j.status === "running" || j.status === "queued").length;
   const completed = jobs.filter((j) => j.status === "completed").length;
@@ -64,6 +77,7 @@ export default function App() {
         {tab === "submit" && <SubmitJob onSubmitted={() => setTab("jobs")} />}
         {tab === "metrics" && <MetricsPanel jobs={jobs} />}
       </main>
+      <JobStatusToaster message={toastMsg} />
     </div>
   );
 }
