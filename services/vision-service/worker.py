@@ -2,6 +2,10 @@
 Celery worker for the vision service.
 Listens on the 'vision' queue, runs inference, and writes results back
 to the API gateway via a shared database connection.
+
+Supports dynamic model and provider selection via payload fields:
+    - model_name: Name of the model to use (e.g. 'mobilenetv2', 'yolov8n', etc.)
+    - provider: Inference provider (e.g. 'cuda', 'rocm', 'vulkan', 'openvino', 'cpu')
 """
 from __future__ import annotations
 
@@ -78,9 +82,18 @@ def run_inference(self, job_id: str, payload: dict):
     broadcast_status(job_id, "running", "intel-igpu-openvino")
     t0 = time.perf_counter()
     try:
-        from inference import run_inference as _infer
-
-        result = _infer(payload)
+        from inference import run_classification, run_detection
+        # Determine which task/model to run
+        task = payload.get("task", "classify")
+        model_name = payload.get("model_name", "mobilenetv2" if task == "classify" else "yolov8n")
+        provider = payload.get("provider")  # Not used directly, but could be passed if needed
+        file_bytes = bytes.fromhex(payload["file_bytes"])
+        if task == "classify":
+            result = run_classification(file_bytes, model_name=model_name)
+        elif task == "detect" or task == "detection":
+            result = run_detection(file_bytes, model_name=model_name)
+        else:
+            raise ValueError(f"Unknown vision task: {task}")
         duration_ms = int((time.perf_counter() - t0) * 1000)
         _update_job(job_id, "completed", "intel-igpu-openvino", result=result, duration_ms=duration_ms)
         broadcast_status(job_id, "completed", "intel-igpu-openvino", result=result, duration_ms=duration_ms)

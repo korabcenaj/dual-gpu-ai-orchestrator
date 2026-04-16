@@ -1,6 +1,10 @@
 """
 Celery worker for the LLM service.
-Listens on the 'llm' queue and runs text inference on the AMD WX 3100 via Vulkan.
+Listens on the 'llm' queue and runs text inference.
+
+Supports dynamic model and provider selection via payload fields:
+    - model_name: Name of the model to use (e.g. 'tinyllama', 'llama2-7b', etc.)
+    - provider: Inference provider (e.g. 'cuda', 'rocm', 'vulkan', 'openvino', 'cpu')
 """
 from __future__ import annotations
 
@@ -85,6 +89,8 @@ def run_inference(self, job_id: str, payload: dict):
             max_tokens=int(payload.get("max_tokens", 256)),
             temperature=float(payload.get("temperature", 0.3)),
             progress_callback=broadcast_progress,
+            model_name=payload.get("model_name", "tinyllama"),
+            provider=payload.get("provider"),
         )
         duration_ms = int((time.perf_counter() - t0) * 1000)
         _update_job(job_id, "completed", "amd-wx3100-vulkan",

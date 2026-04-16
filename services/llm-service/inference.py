@@ -1,12 +1,17 @@
 """
 LLM inference engine.
-Uses llama-cpp-python compiled with Vulkan support, targeting the AMD WX 3100.
-Falls back to CPU if Vulkan is unavailable.
+Supports multiple models and providers (NVIDIA, AMD, Intel, CPU fallback).
+Uses llama-cpp-python with dynamic provider selection.
 
 Supported tasks:
-  - summarize   — condense a document into bullet points
-  - classify    — categorise text into predefined labels
-  - generate    — freeform text completion
+    - summarize   — condense a document into bullet points
+    - classify    — categorise text into predefined labels
+    - generate    — freeform text completion
+
+To add a new model:
+    1. Place the model file in the models/ directory and add to DEFAULT_MODELS.
+    2. Add a new prompt/task to PROMPTS if needed.
+    3. Call run_inference(text, task, ..., model_name="yourmodel")
 """
 from __future__ import annotations
 

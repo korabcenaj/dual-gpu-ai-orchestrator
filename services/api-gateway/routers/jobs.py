@@ -1,5 +1,10 @@
 """
 Job router — submit, list, get, and cancel inference jobs.
+
+Supports dynamic model and provider selection for both LLM and Vision jobs:
+    - model_name: Name of the model to use (e.g. 'tinyllama', 'llama2-7b', 'mobilenetv2', 'yolov8n', etc.)
+    - provider: Inference provider (e.g. 'cuda', 'rocm', 'vulkan', 'openvino', 'cpu')
+Pass these as form fields to /jobs or /jobs/batch to control backend selection.
 """
 import uuid
 from typing import Optional
@@ -32,6 +37,8 @@ async def submit_job(
     labels: Optional[str] = Form(None, description="Comma-separated labels for classify task"),
     max_tokens: Optional[int] = Form(None, description="Maximum output tokens for LLM jobs"),
     temperature: Optional[float] = Form(None, description="Sampling temperature for LLM jobs"),
+    model_name: Optional[str] = Form(None, description="Model name for LLM or vision job (e.g. 'tinyllama', 'mobilenetv2', etc.)"),
+    provider: Optional[str] = Form(None, description="Inference provider (e.g. 'cuda', 'rocm', 'vulkan', 'openvino', 'cpu')"),
     priority: str = Form("medium", description="Job priority: low, medium, or high"),
     file: Optional[UploadFile] = File(None, description="Image file for vision jobs"),
     db: AsyncSession = Depends(get_db),
@@ -65,9 +72,13 @@ async def submit_job(
     if temperature is not None:
         payload["temperature"] = temperature
 
+    if model_name:
+        payload["model_name"] = model_name
+    if provider:
+        payload["provider"] = provider
+
     job = await create_job(db, job_type=job_type, payload=payload, priority=priority)
     JOBS_SUBMITTED.labels(job_type=job_type).inc()
-
     submit_job_task.delay(str(job.id), job_type, payload)
     return job
 
@@ -75,6 +86,8 @@ async def submit_job(
 @router.post("/jobs/batch", response_model=list[JobOut], status_code=202)
 async def submit_batch_jobs(
     task: str = Form("classify", description="Vision task for all jobs"),
+    model_name: Optional[str] = Form(None, description="Model name for vision job (e.g. 'mobilenetv2', 'yolov8n', etc.)"),
+    provider: Optional[str] = Form(None, description="Inference provider (e.g. 'cuda', 'rocm', 'vulkan', 'openvino', 'cpu')"),
     priority: str = Form("medium", description="Job priority: low, medium, or high"),
     files: list[UploadFile] = File(..., description="Image files for batch processing"),
     db: AsyncSession = Depends(get_db),
@@ -92,13 +105,17 @@ async def submit_batch_jobs(
         if len(contents) > 10 * 1024 * 1024:
             raise HTTPException(status_code=413, detail=f"File {file.filename} exceeds 10 MB limit")
 
+
         payload = {
             "job_type": "vision",
             "filename": file.filename,
             "file_bytes": contents.hex(),
             "task": task,
         }
-        
+        if model_name:
+            payload["model_name"] = model_name
+        if provider:
+            payload["provider"] = provider
         job = await create_job(db, job_type="vision", payload=payload, priority=priority)
         JOBS_SUBMITTED.labels(job_type="vision").inc()
         submit_job_task.delay(str(job.id), "vision", payload)

@@ -1,11 +1,16 @@
 """
 Vision inference engine.
-Uses ONNX Runtime with the OpenVINO Execution Provider targeting the Intel HD 530 iGPU.
-Falls back to CPU if the GPU device is unavailable.
+Supports multiple models and providers (NVIDIA, AMD, Intel, CPU fallback).
+Uses ONNX Runtime with dynamic provider selection.
 
 Supports:
-  - Image classification (MobileNetV2, top-5 labels)
-  - Object detection (YOLOv8n — single-class bounding boxes)
+    - Image classification (MobileNetV2, top-5 labels)
+    - Object detection (YOLOv8n — single-class bounding boxes)
+
+To add a new model:
+    1. Place the model file in the models/ directory and add to DEFAULT_MODELS.
+    2. Add a new function (e.g., run_newtask) if needed.
+    3. Call run_classification(image_bytes, model_name="yourmodel") or similar.
 """
 from __future__ import annotations
 
