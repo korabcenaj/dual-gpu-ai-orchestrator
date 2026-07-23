@@ -1,11 +1,9 @@
 import json
 import os
 import time
-from urllib import error
-from urllib import parse, request
+from urllib import error, parse, request
 
 import pytest
-
 
 RUN_LIVE_SMOKE = os.getenv("RUN_LIVE_SMOKE", "0") == "1"
 BASE_URL = os.getenv("SMOKE_BASE_URL", "http://192.168.1.200").rstrip("/")
@@ -44,24 +42,23 @@ def _request_multipart_json(
     body = bytearray()
 
     for name, value in fields.items():
-        body.extend(f"--{boundary}\r\n".encode("utf-8"))
-        body.extend(f'Content-Disposition: form-data; name="{name}"\r\n\r\n'.encode("utf-8"))
+        body.extend(f"--{boundary}\r\n".encode())
+        body.extend(f'Content-Disposition: form-data; name="{name}"\r\n\r\n'.encode())
         body.extend(value.encode("utf-8"))
         body.extend(b"\r\n")
 
     for field_name, filename, content, content_type in files:
-        body.extend(f"--{boundary}\r\n".encode("utf-8"))
+        body.extend(f"--{boundary}\r\n".encode())
         body.extend(
             (
-                f'Content-Disposition: form-data; name="{field_name}"; '
-                f'filename="{filename}"\r\n'
-            ).encode("utf-8")
+                f'Content-Disposition: form-data; name="{field_name}"; filename="{filename}"\r\n'
+            ).encode()
         )
-        body.extend(f"Content-Type: {content_type}\r\n\r\n".encode("utf-8"))
+        body.extend(f"Content-Type: {content_type}\r\n\r\n".encode())
         body.extend(content)
         body.extend(b"\r\n")
 
-    body.extend(f"--{boundary}--\r\n".encode("utf-8"))
+    body.extend(f"--{boundary}--\r\n".encode())
 
     req = request.Request(
         f"{BASE_URL}{path}",

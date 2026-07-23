@@ -6,24 +6,25 @@ Supports dynamic model and provider selection via payload fields:
     - model_name: Name of the model to use (e.g. 'tinyllama', 'llama2-7b', etc.)
     - provider: Inference provider (e.g. 'cuda', 'rocm', 'vulkan', 'openvino', 'cpu')
 """
+
 from __future__ import annotations
 
+import json
 import logging
 import os
 import time
 
+import redis
 from celery import Celery
 from psycopg2.extras import Json
 from sqlalchemy import create_engine, text
-import redis
-import json
 
 logger = logging.getLogger(__name__)
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
-    "postgresql+psycopg2://orchestrator:orchestrator@postgres:5432/orchestrator",
+    "postgresql+psycopg2://orchestrator:local-development-only@postgres:5432/orchestrator",
 )
 
 celery_app = Celery("llm_service", broker=REDIS_URL, backend=REDIS_URL)
@@ -93,10 +94,12 @@ def run_inference(self, job_id: str, payload: dict):
             provider=payload.get("provider"),
         )
         duration_ms = int((time.perf_counter() - t0) * 1000)
-        _update_job(job_id, "completed", "amd-wx3100-vulkan",
-                    result=result, duration_ms=duration_ms)
-        broadcast_status(job_id, "completed", "amd-wx3100-vulkan",
-                    result=result, duration_ms=duration_ms)
+        _update_job(
+            job_id, "completed", "amd-wx3100-vulkan", result=result, duration_ms=duration_ms
+        )
+        broadcast_status(
+            job_id, "completed", "amd-wx3100-vulkan", result=result, duration_ms=duration_ms
+        )
     except Exception as e:
         _update_job(job_id, "failed", "amd-wx3100-vulkan", error=str(e))
         broadcast_status(job_id, "failed", "amd-wx3100-vulkan", error=str(e))

@@ -1,10 +1,11 @@
 """
 Pydantic schemas for API request/response validation.
 """
+
 import uuid
 from datetime import datetime
 from enum import Enum
-from typing import Any, Optional
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
@@ -37,9 +38,9 @@ class JobOut(BaseModel):
     job_type: str
     status: JobStatus
     priority: Priority
-    backend: Optional[str]
+    backend: str | None
     created_at: datetime
     updated_at: datetime
-    duration_ms: Optional[int]
-    result: Optional[dict[str, Any]]
-    error: Optional[str]
+    duration_ms: int | None
+    result: dict[str, Any] | None
+    error: str | None

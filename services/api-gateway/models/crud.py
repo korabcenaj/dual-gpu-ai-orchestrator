@@ -1,8 +1,9 @@
 """
 CRUD helpers — async database operations for jobs.
 """
+
 import uuid
-from typing import Optional, Any
+from typing import Any
 
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,14 +25,14 @@ async def create_job(
     return job
 
 
-async def get_job(db: AsyncSession, job_id: uuid.UUID) -> Optional[Job]:
+async def get_job(db: AsyncSession, job_id: uuid.UUID) -> Job | None:
     result = await db.execute(select(Job).where(Job.id == job_id))
     return result.scalar_one_or_none()
 
 
 async def list_jobs(
     db: AsyncSession,
-    status: Optional[str] = None,
+    status: str | None = None,
     limit: int = 50,
     offset: int = 0,
 ) -> list[Job]:
@@ -46,10 +47,10 @@ async def update_job_status(
     db: AsyncSession,
     job_id: uuid.UUID,
     status: JobStatus,
-    backend: Optional[str] = None,
-    result: Optional[dict] = None,
-    error: Optional[str] = None,
-    duration_ms: Optional[int] = None,
+    backend: str | None = None,
+    result: dict | None = None,
+    error: str | None = None,
+    duration_ms: int | None = None,
 ) -> None:
     values: dict[str, Any] = {"status": status}
     if backend is not None:

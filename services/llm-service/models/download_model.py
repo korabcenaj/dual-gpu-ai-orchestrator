@@ -1,8 +1,8 @@
-#!/usr/bin/env python3
 """
 Download the TinyLlama GGUF model from HuggingFace.
 Model: TinyLlama-1.1B-Chat-v1.0 Q4_K_M (~700 MB)
 """
+
 import os
 import tempfile
 import urllib.request
@@ -16,9 +16,7 @@ MODEL_URL = os.getenv(
     "https://huggingface.co/TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF/resolve/main/"
     "tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf",
 )
-MODEL_PATH = MODELS_DIR / os.getenv(
-    "MODEL_FILENAME", "tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf"
-)
+MODEL_PATH = MODELS_DIR / os.getenv("MODEL_FILENAME", "tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf")
 
 
 def show_progress(count, block_size, total_size):

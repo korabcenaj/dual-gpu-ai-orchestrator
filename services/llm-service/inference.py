@@ -1,7 +1,7 @@
-"""
-LLM inference engine.
-Supports multiple models and providers (NVIDIA, AMD, Intel, CPU fallback).
-Uses llama-cpp-python with dynamic provider selection.
+"""LLM inference for the AMD Vulkan worker, with a CPU fallback.
+
+Models are loaded from the runtime-mounted ``models`` volume instead of being
+embedded in the container image.
 
 Supported tasks:
     - summarize   — condense a document into bullet points
@@ -13,6 +13,7 @@ To add a new model:
     2. Add a new prompt/task to PROMPTS if needed.
     3. Call run_inference(text, task, ..., model_name="yourmodel")
 """
+
 from __future__ import annotations
 
 import logging
@@ -24,24 +25,15 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 MODELS_DIR = Path(__file__).parent / "models"
-def get_llm():
-
-# --- Multi-model and multi-provider support ---
 DEFAULT_MODELS = {
     "tinyllama": MODELS_DIR / "tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf",
-    # Add more models here
-    # "llama2-7b": MODELS_DIR / "llama-2-7b.Q4_K_M.gguf",
 }
 
-def _detect_provider():
-    # Try to detect the best provider based on environment or node labels
-    # Priority: NVIDIA (CUDA), AMD (ROCm/Vulkan), Intel (OpenVINO), CPU
+
+def _detect_provider() -> str:
     provider = os.getenv("LLM_PROVIDER")
     if provider:
         return provider
-    # Fallback: try to detect from environment
-    if os.getenv("NVIDIA_VISIBLE_DEVICES"):
-        return "cuda"
     if os.getenv("ROCM_VISIBLE_DEVICES"):
         return "rocm"
     if os.getenv("LLAMACPP_VULKAN"):
@@ -50,24 +42,41 @@ def _detect_provider():
         return "openvino"
     return "cpu"
 
-def _load_model(model_name="tinyllama", provider=None, gpu_layers=None):
+
+def _load_model(
+    model_name: str = "tinyllama",
+    provider: str | None = None,
+    gpu_layers: int | None = None,
+):
     from llama_cpp import Llama
-    model_path = str(DEFAULT_MODELS[model_name])
-    if not DEFAULT_MODELS[model_name].exists():
+
+    try:
+        model_file = DEFAULT_MODELS[model_name]
+    except KeyError as exc:
+        raise ValueError(
+            f"Unknown LLM model {model_name!r}; choose from {sorted(DEFAULT_MODELS)}"
+        ) from exc
+
+    model_path = str(model_file)
+    if not model_file.exists():
         raise FileNotFoundError(
-            f"Model not found at {model_path}. Run: "
-            "python models/download_model.py"
+            f"Model not found at {model_path}. Run: python models/download_model.py"
         )
     provider = provider or _detect_provider()
     if gpu_layers is None:
-        # Set sensible defaults based on provider
         if provider == "cuda":
             gpu_layers = int(os.getenv("LLM_GPU_LAYERS", "40"))
-        elif provider == "rocm" or provider == "vulkan":
+        elif provider in {"rocm", "vulkan"}:
             gpu_layers = int(os.getenv("LLM_GPU_LAYERS", "35"))
         else:
             gpu_layers = 0
-    logger.info(f"Loading LLM '{model_name}' from {model_path} (provider={provider}, n_gpu_layers={gpu_layers})")
+    logger.info(
+        "Loading LLM %r from %s (provider=%s, n_gpu_layers=%s)",
+        model_name,
+        model_path,
+        provider,
+        gpu_layers,
+    )
     llm = Llama(
         model_path=model_path,
         n_gpu_layers=gpu_layers,
@@ -78,10 +87,15 @@ def _load_model(model_name="tinyllama", provider=None, gpu_layers=None):
     logger.info("Model loaded.")
     return llm
 
-# Cache for loaded models by (model_name, provider)
-_llm_cache = {}
 
-def get_llm(model_name="tinyllama", provider=None, gpu_layers=None):
+_llm_cache: dict[tuple[str, str | None, int | None], Any] = {}
+
+
+def get_llm(
+    model_name: str = "tinyllama",
+    provider: str | None = None,
+    gpu_layers: int | None = None,
+):
     key = (model_name, provider, gpu_layers)
     if key not in _llm_cache:
         _llm_cache[key] = _load_model(model_name, provider, gpu_layers)
@@ -100,18 +114,12 @@ PROMPTS = {
         "<|user|>Classify this text:\n\n{text}</s>"
         "<|assistant|>"
     ),
-    "generate": (
-        "<|system|>You are a helpful assistant.</s>"
-        "<|user|>{text}</s>"
-        "<|assistant|>"
-    ),
+    "generate": ("<|system|>You are a helpful assistant.</s><|user|>{text}</s><|assistant|>"),
 }
 
 DEFAULT_LABELS = ["positive", "negative", "neutral", "technical", "general", "question"]
 
 
-
-# --- Generic inference function supporting multiple models/providers ---
 def run_inference(
     text: str,
     task: str = "generate",
@@ -119,8 +127,8 @@ def run_inference(
     max_tokens: int = 256,
     temperature: float = 0.3,
     model_name: str = "tinyllama",
-    provider: str = None,
-    gpu_layers: int = None,
+    provider: str | None = None,
+    gpu_layers: int | None = None,
 ) -> dict[str, Any]:
     if task not in PROMPTS:
         raise ValueError(f"Unknown task {task!r}. Choose from: {list(PROMPTS)}")
@@ -152,8 +160,6 @@ def run_inference(
     }
 
 
-
-# --- Generic inference with progress (for jobs) ---
 def run_inference_with_progress(
     job_id: str,
     text: str,
@@ -161,10 +167,10 @@ def run_inference_with_progress(
     labels: list[str] | None = None,
     max_tokens: int = 256,
     temperature: float = 0.3,
-    progress_callback=None,
+    progress_callback: Any | None = None,
     model_name: str = "tinyllama",
-    provider: str = None,
-    gpu_layers: int = None,
+    provider: str | None = None,
+    gpu_layers: int | None = None,
 ) -> dict[str, Any]:
     if task not in PROMPTS:
         raise ValueError(f"Unknown task {task!r}. Choose from: {list(PROMPTS)}")
@@ -175,35 +181,28 @@ def run_inference_with_progress(
     t0 = time.perf_counter()
     llm = get_llm(model_name, provider, gpu_layers)
     tokens_generated = 0
-    output_text = ""
-    def on_token(token):
-        nonlocal tokens_generated, output_text
-        tokens_generated += 1
-        output_text += token
-        if progress_callback:
-            percent = int(100 * tokens_generated / max_tokens)
-            progress_callback(job_id, percent)
-    output = llm(
+    output_parts: list[str] = []
+    chunks = llm(
         prompt,
         max_tokens=max_tokens,
         temperature=temperature,
         stop=["</s>", "<|user|>"],
         echo=False,
         stream=True,
-        callback=on_token,
     )
+    for chunk in chunks:
+        token = chunk["choices"][0]["text"]
+        output_parts.append(token)
+        tokens_generated += 1
+        if progress_callback:
+            percent = min(100, int(100 * tokens_generated / max_tokens))
+            progress_callback(job_id, percent)
     elapsed_ms = int((time.perf_counter() - t0) * 1000)
     return {
         "task": task,
-        "output": output_text,
+        "output": "".join(output_parts).strip(),
         "tokens_generated": tokens_generated,
         "inference_ms": elapsed_ms,
         "model": model_name,
         "provider": provider or _detect_provider(),
     }
-
-# --- TEMPLATE: Add new model/task here ---
-# To add a new model:
-# 1. Place the model file in the models/ directory and add to DEFAULT_MODELS.
-# 2. Add a new prompt/task to PROMPTS if needed.
-# 3. Call run_inference(text, task, ..., model_name="yourmodel")

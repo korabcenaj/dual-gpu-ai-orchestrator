@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  api:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+      - name: Install test dependencies
+        run: python -m pip install -r requirements-dev.txt
+      - name: Run API and queue tests
+        env:
+          PYTHONPATH: services/api-gateway
+        run: pytest -q tests/test_api_health.py tests/test_jobs_queue_flow.py
+      - name: Audit API dependencies
+        run: pip-audit -r services/api-gateway/requirements.txt
+      - name: Lint Python services
+        run: |
+          ruff check services tests
+          ruff format --check services tests
+      - name: Compile all Python services
+        run: python -m compileall -q services tests
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run build
+
+  configuration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate Compose configuration
+        env:
+          POSTGRES_PASSWORD: ci-only-password
+          GRAFANA_PASSWORD: ci-only-password
+        run: docker compose config --quiet
+      - uses: azure/setup-kubectl@v4
+      - name: Render Kubernetes manifests
+        run: kubectl kustomize k8s >/dev/null

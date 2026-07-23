@@ -1,12 +1,11 @@
 """Health check and readiness endpoints."""
-import asyncio
+
+import os
 
 import redis.asyncio as aioredis
 from fastapi import APIRouter
-from sqlalchemy import text
-
 from models.database import async_engine
-import os
+from sqlalchemy import text
 
 router = APIRouter(tags=["health"])
 
@@ -25,7 +24,7 @@ async def readiness():
         async with async_engine.connect() as conn:
             await conn.execute(text("SELECT 1"))
         checks["postgres"] = "ok"
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - readiness must report dependency failures
         checks["postgres"] = f"error: {exc}"
 
     # Redis check
@@ -34,7 +33,7 @@ async def readiness():
         await r.ping()
         await r.aclose()
         checks["redis"] = "ok"
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - readiness must report dependency failures
         checks["redis"] = f"error: {exc}"
 
     all_ok = all(v == "ok" for v in checks.values())

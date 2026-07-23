@@ -1,0 +1,42 @@
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+    groups:
+      frontend:
+        patterns: ["*"]
+
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      python:
+        patterns: ["*"]
+
+  - package-ecosystem: docker
+    directory: /frontend
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: docker
+    directory: /services/api-gateway
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: docker
+    directory: /services/vision-service
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: docker
+    directory: /services/llm-service
+    schedule:
+      interval: weekly

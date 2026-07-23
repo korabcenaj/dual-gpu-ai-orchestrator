@@ -1,10 +1,11 @@
 """
 SQLAlchemy ORM model for the jobs table.
 """
-import uuid
-from datetime import datetime, timezone
 
-from sqlalchemy import String, JSON, Integer, DateTime, Text
+import uuid
+from datetime import UTC, datetime
+
+from sqlalchemy import JSON, DateTime, Integer, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -12,15 +13,13 @@ from models.database import Base
 
 
 def utcnow():
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 class Job(Base):
     __tablename__ = "jobs"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     job_type: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="pending", index=True)
     priority: Mapped[str] = mapped_column(String(32), nullable=False, default="medium", index=True)

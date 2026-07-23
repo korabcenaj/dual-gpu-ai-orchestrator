@@ -1,2 +1,11 @@
-/.pytest_cache
-/.venv
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+node_modules/
+dist/
+.env
+*.gguf
+*.onnx
+*.pt

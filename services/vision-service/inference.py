@@ -1,7 +1,7 @@
-"""
-Vision inference engine.
-Supports multiple models and providers (NVIDIA, AMD, Intel, CPU fallback).
-Uses ONNX Runtime with dynamic provider selection.
+"""Vision inference for the Intel iGPU worker, with a CPU fallback.
+
+Models are loaded from the runtime-mounted ``models`` volume instead of being
+embedded in the container image.
 
 Supports:
     - Image classification (MobileNetV2, top-5 labels)
@@ -12,9 +12,12 @@ To add a new model:
     2. Add a new function (e.g., run_newtask) if needed.
     3. Call run_classification(image_bytes, model_name="yourmodel") or similar.
 """
+
 from __future__ import annotations
 
+import io
 import logging
+import os
 import time
 from pathlib import Path
 from typing import Any
@@ -22,62 +25,60 @@ from typing import Any
 import numpy as np
 import onnxruntime as ort
 from PIL import Image
-import io
 
 logger = logging.getLogger(__name__)
 
 MODELS_DIR = Path(__file__).parent / "models"
 IMAGENET_LABELS_PATH = MODELS_DIR / "imagenet_labels.txt"
 
-# --- Multi-model and multi-provider support ---
 DEFAULT_MODELS = {
     "mobilenetv2": MODELS_DIR / "mobilenetv2.onnx",
     "yolov8n": MODELS_DIR / "yolov8n.onnx",
-    # Add more models here
-    # "resnet50": MODELS_DIR / "resnet50.onnx",
 }
 
-def _detect_providers():
-    # Try to detect the best providers based on environment or node labels
-    # Priority: NVIDIA (CUDA), AMD (ROCm/Vulkan), Intel (OpenVINO), CPU
-    providers = []
-    if os.getenv("NVIDIA_VISIBLE_DEVICES"):
-        providers.append(("CUDAExecutionProvider", {}))
-    if os.getenv("ROCM_VISIBLE_DEVICES"):
-        providers.append(("ROCMExecutionProvider", {}))
-    if os.getenv("OPENVINO_DEVICE") or True:  # Always try OpenVINO for Intel
-        providers.append(("OpenVINOExecutionProvider", {"device_type": os.getenv("OPENVINO_DEVICE", "GPU_FP16")}))
-        providers.append(("OpenVINOExecutionProvider", {"device_type": "CPU_FP32"}))
+
+def _provider_candidates() -> list[tuple[str, dict[str, str]]]:
+    """Return Intel-first ONNX Runtime provider candidates."""
+    providers: list[tuple[str, dict[str, str]]] = []
+    openvino_device = os.getenv("OPENVINO_DEVICE", "GPU_FP16")
+    providers.append(("OpenVINOExecutionProvider", {"device_type": openvino_device}))
+    providers.append(("OpenVINOExecutionProvider", {"device_type": "CPU_FP32"}))
     providers.append(("CPUExecutionProvider", {}))
     return providers
 
 
-
 def _build_session(model_name: str) -> ort.InferenceSession:
-    model_path = DEFAULT_MODELS[model_name]
+    try:
+        model_path = DEFAULT_MODELS[model_name]
+    except KeyError as exc:
+        raise ValueError(
+            f"Unknown vision model {model_name!r}; choose from {sorted(DEFAULT_MODELS)}"
+        ) from exc
     if not model_path.exists():
         raise FileNotFoundError(f"Model file missing: {model_path}")
-    available = {p for p in ort.get_available_providers()}
+    available = set(ort.get_available_providers())
     logger.info("ONNX Runtime providers available: %s", sorted(available))
-    for provider, opts in _detect_providers():
-        if provider in available or provider == "CPUExecutionProvider":
+    for provider, options in _provider_candidates():
+        if provider in available:
             try:
                 sess_options = ort.SessionOptions()
-                sess_options.graph_optimization_level = (
-                    ort.GraphOptimizationLevel.ORT_ENABLE_ALL
-                )
+                sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
                 sess = ort.InferenceSession(
                     str(model_path),
                     sess_options=sess_options,
-                    providers=[(provider, opts)] if opts else [provider],
+                    providers=[(provider, options)] if options else [provider],
                 )
-                logger.info("Loaded %s with provider %s opts=%s", model_path.name, provider, opts)
+                logger.info(
+                    "Loaded %s with provider %s options=%s",
+                    model_path.name,
+                    provider,
+                    options,
+                )
                 return sess
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 - try the next runtime provider
                 logger.warning("Provider %s failed: %s — trying next", provider, exc)
     raise RuntimeError(
-        f"No valid provider found for {model_path}. "
-        f"Available providers: {sorted(available)}"
+        f"No valid provider found for {model_path}. Available providers: {sorted(available)}"
     )
 
 
@@ -87,10 +88,6 @@ def _load_imagenet_labels() -> list[str]:
     return IMAGENET_LABELS_PATH.read_text().splitlines()
 
 
-def run_classification(image_bytes: bytes) -> dict[str, Any]:
-def run_detection(image_bytes: bytes) -> dict[str, Any]:
-
-# --- Generic inference functions supporting multiple models/providers ---
 def run_classification(image_bytes: bytes, model_name: str = "mobilenetv2") -> dict[str, Any]:
     t0 = time.perf_counter()
     img = Image.open(io.BytesIO(image_bytes)).convert("RGB").resize((224, 224))
@@ -111,7 +108,13 @@ def run_classification(image_bytes: bytes, model_name: str = "mobilenetv2") -> d
         for i in top5_idx
     ]
     elapsed_ms = int((time.perf_counter() - t0) * 1000)
-    return {"top5": top5, "inference_ms": elapsed_ms, "task": "classification", "model": model_name}
+    return {
+        "top5": top5,
+        "inference_ms": elapsed_ms,
+        "task": "classification",
+        "model": model_name,
+    }
+
 
 def run_detection(image_bytes: bytes, model_name: str = "yolov8n") -> dict[str, Any]:
     t0 = time.perf_counter()
@@ -142,16 +145,9 @@ def run_detection(image_bytes: bytes, model_name: str = "yolov8n") -> dict[str, 
     elapsed_ms = int((time.perf_counter() - t0) * 1000)
     return {
         "detections": [
-            {"box": b, "score": s, "class_id": c}
-            for b, s, c in zip(boxes, scores, class_ids)
+            {"box": b, "score": s, "class_id": c} for b, s, c in zip(boxes, scores, class_ids)
         ],
         "inference_ms": elapsed_ms,
         "task": "detection",
         "model": model_name,
     }
-
-# --- TEMPLATE: Add new model/task here ---
-# To add a new model:
-# 1. Place the model file in the models/ directory and add to DEFAULT_MODELS.
-# 2. Add a new function (e.g., run_newtask) if needed.
-# 3. Call run_classification(image_bytes, model_name="yourmodel") or similar.

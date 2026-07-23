@@ -1,8 +1,7 @@
-from datetime import datetime, timezone
 import uuid
+from datetime import UTC, datetime
 
 from fastapi.testclient import TestClient
-
 from main import app
 from models.database import get_db
 from routers import jobs as jobs_router
@@ -11,7 +10,7 @@ from worker import submit_job_task
 
 class DummyJob:
     def __init__(self, job_type: str, priority: str):
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         self.id = uuid.uuid4()
         self.job_type = job_type
         self.status = "queued"

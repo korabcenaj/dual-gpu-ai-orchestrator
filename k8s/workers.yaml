@@ -12,8 +12,6 @@ spec:
       labels:
         app: vision-worker
     spec:
-      nodeSelector:
-        kubernetes.io/hostname: k8s-master
       imagePullSecrets:
         - name: ghcr-creds
       affinity:
@@ -30,7 +28,9 @@ spec:
           imagePullPolicy: IfNotPresent
           args: ["celery", "-A", "worker", "worker", "--queues=vision", "--concurrency=1", "--loglevel=info"]
           securityContext:
-            privileged: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
           env:
             - name: REDIS_URL
               valueFrom:
@@ -44,17 +44,21 @@ spec:
                   key: DATABASE_URL_SYNC
             - name: PYTHONPATH
               value: /app
+            - name: VISION_BOOTSTRAP_MODELS
+              value: "1"
           volumeMounts:
             - name: dri-dev
               mountPath: /dev/dri
-          - name: vision-worker
-            image: ghcr.io/korabcenaj/dual-gpu-vision-worker:latest
-            imagePullPolicy: Always
+            - name: models
+              mountPath: /app/models
       volumes:
         - name: dri-dev
           hostPath:
             path: /dev/dri
             type: Directory
+        - name: models
+          persistentVolumeClaim:
+            claimName: vision-models
 
 ---
 apiVersion: apps/v1
@@ -71,8 +75,6 @@ spec:
       labels:
         app: llm-worker
     spec:
-      nodeSelector:
-        kubernetes.io/hostname: k8s-master
       imagePullSecrets:
         - name: ghcr-creds
       affinity:
@@ -89,7 +91,9 @@ spec:
           imagePullPolicy: IfNotPresent
           args: ["celery", "-A", "worker", "worker", "--queues=llm", "--concurrency=1", "--loglevel=info"]
           securityContext:
-            privileged: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
           env:
             - name: REDIS_URL
               valueFrom:
@@ -103,13 +107,24 @@ spec:
                   key: DATABASE_URL_SYNC
             - name: LLM_GPU_LAYERS
               value: "35"
+            - name: LLM_PROVIDER
+              value: vulkan
+            - name: LLAMACPP_VULKAN
+              value: "1"
+            - name: LLM_BOOTSTRAP_MODELS
+              value: "1"
             - name: PYTHONPATH
               value: /app
           volumeMounts:
             - name: dri-dev
               mountPath: /dev/dri
+            - name: models
+              mountPath: /app/models
       volumes:
         - name: dri-dev
           hostPath:
             path: /dev/dri
             type: Directory
+        - name: models
+          persistentVolumeClaim:
+            claimName: llm-models

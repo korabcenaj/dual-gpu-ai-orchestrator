@@ -6,8 +6,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl libpq-dev gcc && \
     rm -rf /var/lib/apt/lists/*
 
+RUN python -m pip install --no-cache-dir --upgrade \
+    pip==26.1.2 setuptools==83.0.0
+
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
+RUN python -c "import fastapi, redis, sqlalchemy"
 
 COPY . .
 

@@ -1,8 +1,6 @@
-version: "3.9"
-
 x-common-env: &common-env
   REDIS_URL: redis://redis:6379/0
-  DATABASE_URL: postgresql+asyncpg://orchestrator:orchestrator@postgres:5432/orchestrator
+  DATABASE_URL: postgresql+asyncpg://orchestrator:${POSTGRES_PASSWORD:-local-development-only}@postgres:5432/orchestrator
 
 services:
   # ── Postgres ────────────────────────────────────────────────────────────────
@@ -11,7 +9,7 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: orchestrator
-      POSTGRES_PASSWORD: orchestrator
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local-development-only}
       POSTGRES_DB: orchestrator
     volumes:
       - postgres_data:/var/lib/postgresql/data
@@ -41,8 +39,8 @@ services:
       - "8000:8000"
     environment:
       <<: *common-env
-      DATABASE_URL: postgresql+asyncpg://orchestrator:orchestrator@postgres:5432/orchestrator
-      CORS_ORIGINS: "http://localhost:5173,http://localhost:80"
+      DATABASE_URL: postgresql+asyncpg://orchestrator:${POSTGRES_PASSWORD:-local-development-only}@postgres:5432/orchestrator
+      CORS_ORIGINS: "http://localhost:5173,http://localhost:3000"
     depends_on:
       postgres:
         condition: service_healthy
@@ -61,7 +59,7 @@ services:
     command: celery -A worker worker --queues=dispatch --concurrency=1 --loglevel=info
     environment:
       <<: *common-env
-      DATABASE_URL: postgresql+asyncpg://orchestrator:orchestrator@postgres:5432/orchestrator
+      DATABASE_URL: postgresql+asyncpg://orchestrator:${POSTGRES_PASSWORD:-local-development-only}@postgres:5432/orchestrator
     depends_on:
       redis:
         condition: service_healthy
@@ -75,7 +73,8 @@ services:
     restart: unless-stopped
     environment:
       <<: *common-env
-      DATABASE_URL: postgresql+psycopg2://orchestrator:orchestrator@postgres:5432/orchestrator
+      DATABASE_URL: postgresql+psycopg2://orchestrator:${POSTGRES_PASSWORD:-local-development-only}@postgres:5432/orchestrator
+      VISION_BOOTSTRAP_MODELS: ${VISION_BOOTSTRAP_MODELS:-0}
     devices:
       - /dev/dri/renderD128:/dev/dri/renderD128   # Intel HD 530
     group_add:
@@ -96,8 +95,11 @@ services:
     restart: unless-stopped
     environment:
       <<: *common-env
-      DATABASE_URL: postgresql+psycopg2://orchestrator:orchestrator@postgres:5432/orchestrator
+      DATABASE_URL: postgresql+psycopg2://orchestrator:${POSTGRES_PASSWORD:-local-development-only}@postgres:5432/orchestrator
       LLM_GPU_LAYERS: "35"
+      LLM_PROVIDER: vulkan
+      LLAMACPP_VULKAN: "1"
+      LLM_BOOTSTRAP_MODELS: ${LLM_BOOTSTRAP_MODELS:-0}
     devices:
       - /dev/dri/renderD129:/dev/dri/renderD129   # AMD Radeon PRO WX 3100
     group_add:
@@ -139,9 +141,9 @@ services:
     image: grafana/grafana:11.3.2
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "3001:3000"
     environment:
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-local-change-me}
       GF_AUTH_ANONYMOUS_ENABLED: "false"
     volumes:
       - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
@@ -162,7 +164,7 @@ services:
     image: prometheuscommunity/postgres-exporter:v0.16.0
     restart: unless-stopped
     environment:
-      DATA_SOURCE_NAME: "postgresql://orchestrator:orchestrator@postgres:5432/orchestrator?sslmode=disable"
+      DATA_SOURCE_NAME: "postgresql://orchestrator:${POSTGRES_PASSWORD:-local-development-only}@postgres:5432/orchestrator?sslmode=disable"
     depends_on:
       postgres:
         condition: service_healthy

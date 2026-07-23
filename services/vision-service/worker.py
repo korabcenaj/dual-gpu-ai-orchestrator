@@ -7,26 +7,25 @@ Supports dynamic model and provider selection via payload fields:
     - model_name: Name of the model to use (e.g. 'mobilenetv2', 'yolov8n', etc.)
     - provider: Inference provider (e.g. 'cuda', 'rocm', 'vulkan', 'openvino', 'cpu')
 """
+
 from __future__ import annotations
 
+import json
 import logging
 import os
 import time
-import uuid
 
+import redis
 from celery import Celery
 from psycopg2.extras import Json
-from sqlalchemy import create_engine, update
-from sqlalchemy.orm import Session
-import redis
-import json
+from sqlalchemy import create_engine
 
 logger = logging.getLogger(__name__)
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
-    "postgresql+psycopg2://orchestrator:orchestrator@postgres:5432/orchestrator",
+    "postgresql+psycopg2://orchestrator:local-development-only@postgres:5432/orchestrator",
 )
 
 celery_app = Celery("vision_service", broker=REDIS_URL, backend=REDIS_URL)
@@ -83,10 +82,10 @@ def run_inference(self, job_id: str, payload: dict):
     t0 = time.perf_counter()
     try:
         from inference import run_classification, run_detection
+
         # Determine which task/model to run
         task = payload.get("task", "classify")
         model_name = payload.get("model_name", "mobilenetv2" if task == "classify" else "yolov8n")
-        provider = payload.get("provider")  # Not used directly, but could be passed if needed
         file_bytes = bytes.fromhex(payload["file_bytes"])
         if task == "classify":
             result = run_classification(file_bytes, model_name=model_name)
@@ -95,8 +94,12 @@ def run_inference(self, job_id: str, payload: dict):
         else:
             raise ValueError(f"Unknown vision task: {task}")
         duration_ms = int((time.perf_counter() - t0) * 1000)
-        _update_job(job_id, "completed", "intel-igpu-openvino", result=result, duration_ms=duration_ms)
-        broadcast_status(job_id, "completed", "intel-igpu-openvino", result=result, duration_ms=duration_ms)
+        _update_job(
+            job_id, "completed", "intel-igpu-openvino", result=result, duration_ms=duration_ms
+        )
+        broadcast_status(
+            job_id, "completed", "intel-igpu-openvino", result=result, duration_ms=duration_ms
+        )
     except Exception as e:
         _update_job(job_id, "failed", "intel-igpu-openvino", error=str(e))
         broadcast_status(job_id, "failed", "intel-igpu-openvino", error=str(e))

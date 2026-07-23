@@ -1,15 +1,23 @@
-import { useState, type ReactNode } from "react";
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { useQuery } from "react-query";
 import { Activity, Cpu, Layers, PlusCircle } from "lucide-react";
 import JobTable from "./components/JobTable";
 import SubmitJob from "./components/SubmitJob";
-import MetricsPanel from "./components/MetricsPanel";
 import HealthBadge from "./components/HealthBadge";
 import { fetchJobs } from "./api/client";
 import { useJobWebSocket, JobStatusMessage } from "./hooks/useJobWebSocket";
 import JobStatusToaster from "./components/JobStatusToaster";
 
 type Tab = "jobs" | "submit" | "metrics";
+
+const MetricsPanel = lazy(() => import("./components/MetricsPanel"));
 
 export default function App() {
   const [tab, setTab] = useState<Tab>("jobs");
@@ -75,7 +83,11 @@ export default function App() {
       <main className="flex-1 p-6">
         {tab === "jobs" && <JobTable jobs={jobs} isLoading={isLoading} />}
         {tab === "submit" && <SubmitJob onSubmitted={() => setTab("jobs")} />}
-        {tab === "metrics" && <MetricsPanel jobs={jobs} />}
+        {tab === "metrics" && (
+          <Suspense fallback={<p className="text-gray-400">Loading metrics…</p>}>
+            <MetricsPanel jobs={jobs} />
+          </Suspense>
+        )}
       </main>
       <JobStatusToaster message={toastMsg} />
     </div>

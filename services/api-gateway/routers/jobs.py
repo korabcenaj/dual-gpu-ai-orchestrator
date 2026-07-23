@@ -6,16 +6,15 @@ Supports dynamic model and provider selection for both LLM and Vision jobs:
     - provider: Inference provider (e.g. 'cuda', 'rocm', 'vulkan', 'openvino', 'cpu')
 Pass these as form fields to /jobs or /jobs/batch to control backend selection.
 """
+
 import uuid
-from typing import Optional
 
-from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Depends, Response
-from sqlalchemy.ext.asyncio import AsyncSession
-from prometheus_client import Counter, Histogram
-
-from models.database import get_db
-from models.schemas import JobOut, JobStatus, Priority
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile
 from models.crud import create_job, get_job, list_jobs, update_job_status
+from models.database import get_db
+from models.schemas import JobOut, JobStatus
+from prometheus_client import Counter, Histogram
+from sqlalchemy.ext.asyncio import AsyncSession
 from worker import submit_job_task
 
 router = APIRouter(tags=["jobs"])
@@ -32,15 +31,19 @@ JOBS_DURATION = Histogram(
 @router.post("/jobs", response_model=JobOut, status_code=202)
 async def submit_job(
     job_type: str = Form(..., description="'vision' or 'llm'"),
-    prompt: Optional[str] = Form(None, description="Text prompt for LLM jobs"),
-    task: Optional[str] = Form(None, description="Inference task override"),
-    labels: Optional[str] = Form(None, description="Comma-separated labels for classify task"),
-    max_tokens: Optional[int] = Form(None, description="Maximum output tokens for LLM jobs"),
-    temperature: Optional[float] = Form(None, description="Sampling temperature for LLM jobs"),
-    model_name: Optional[str] = Form(None, description="Model name for LLM or vision job (e.g. 'tinyllama', 'mobilenetv2', etc.)"),
-    provider: Optional[str] = Form(None, description="Inference provider (e.g. 'cuda', 'rocm', 'vulkan', 'openvino', 'cpu')"),
+    prompt: str | None = Form(None, description="Text prompt for LLM jobs"),
+    task: str | None = Form(None, description="Inference task override"),
+    labels: str | None = Form(None, description="Comma-separated labels for classify task"),
+    max_tokens: int | None = Form(None, description="Maximum output tokens for LLM jobs"),
+    temperature: float | None = Form(None, description="Sampling temperature for LLM jobs"),
+    model_name: str | None = Form(
+        None, description="Model name for LLM or vision job (e.g. 'tinyllama', 'mobilenetv2', etc.)"
+    ),
+    provider: str | None = Form(
+        None, description="Inference provider (e.g. 'cuda', 'rocm', 'vulkan', 'openvino', 'cpu')"
+    ),
     priority: str = Form("medium", description="Job priority: low, medium, or high"),
-    file: Optional[UploadFile] = File(None, description="Image file for vision jobs"),
+    file: UploadFile | None = File(None, description="Image file for vision jobs"),
     db: AsyncSession = Depends(get_db),
 ):
     if job_type not in ("vision", "llm"):
@@ -86,8 +89,12 @@ async def submit_job(
 @router.post("/jobs/batch", response_model=list[JobOut], status_code=202)
 async def submit_batch_jobs(
     task: str = Form("classify", description="Vision task for all jobs"),
-    model_name: Optional[str] = Form(None, description="Model name for vision job (e.g. 'mobilenetv2', 'yolov8n', etc.)"),
-    provider: Optional[str] = Form(None, description="Inference provider (e.g. 'cuda', 'rocm', 'vulkan', 'openvino', 'cpu')"),
+    model_name: str | None = Form(
+        None, description="Model name for vision job (e.g. 'mobilenetv2', 'yolov8n', etc.)"
+    ),
+    provider: str | None = Form(
+        None, description="Inference provider (e.g. 'cuda', 'rocm', 'vulkan', 'openvino', 'cpu')"
+    ),
     priority: str = Form("medium", description="Job priority: low, medium, or high"),
     files: list[UploadFile] = File(..., description="Image files for batch processing"),
     db: AsyncSession = Depends(get_db),
@@ -104,7 +111,6 @@ async def submit_batch_jobs(
         contents = await file.read()
         if len(contents) > 10 * 1024 * 1024:
             raise HTTPException(status_code=413, detail=f"File {file.filename} exceeds 10 MB limit")
-
 
         payload = {
             "job_type": "vision",
@@ -126,7 +132,7 @@ async def submit_batch_jobs(
 
 @router.get("/jobs", response_model=list[JobOut])
 async def list_all_jobs(
-    status: Optional[str] = None,
+    status: str | None = None,
     limit: int = 50,
     offset: int = 0,
     db: AsyncSession = Depends(get_db),

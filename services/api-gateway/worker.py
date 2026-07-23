@@ -1,6 +1,7 @@
 """
 Celery worker task — dispatches jobs to vision or LLM service queues.
 """
+
 import os
 
 from celery import Celery
