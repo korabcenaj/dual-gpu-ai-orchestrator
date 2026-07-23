@@ -56,6 +56,6 @@ jobs:
           POSTGRES_PASSWORD: ci-only-password
           GRAFANA_PASSWORD: ci-only-password
         run: docker compose config --quiet
-      - uses: azure/setup-kubectl@v4
+      - uses: azure/setup-kubectl@v5
       - name: Render Kubernetes manifests
         run: kubectl kustomize k8s >/dev/null
