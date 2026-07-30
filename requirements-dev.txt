@@ -1,5 +1,5 @@
 -r services/api-gateway/requirements.txt
-httpx2==2.9.0
+httpx2==2.9.1
 pip-audit==2.10.1
 pytest==8.4.2
 ruff==0.16.0
